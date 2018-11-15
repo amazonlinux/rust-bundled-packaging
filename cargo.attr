@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+
+%__cargo_provides   xargs jq -r '.packages[] | select(.source != null) | "bundled(crate(" + .name + ")) = " + .version'
+%__cargo_path       ^%{_cargometadir}/.*\.json$

@@ -3,6 +3,8 @@
 %__cargo %{_bindir}/cargo
 %__cargo_common_opts %{?_smp_mflags}
 
+%_cargometadir %{_datadir}/cargo-metadata
+
 %cargo_prep (\
 set -eu \
 %{__mkdir} -p .registry \
@@ -38,7 +40,9 @@ do_cargo_build_registry $REGISTRY \
 
 %cargo_install \
 %{__cargo} install %{__cargo_common_opts} --path . --root %{buildroot}%{_prefix} %{?cargo_args} \
-%{__rm} %{buildroot}%{_prefix}/.crates.toml
+%{__rm} %{buildroot}%{_prefix}/.crates.toml \
+%{__mkdir_p} %{buildroot}%{_cargometadir} \
+%{__cargo} metadata --format-version 1 %{?cargo_args} > %{buildroot}%{_cargometadir}/%{name}.json
 
 %__cargo_crate_source_url() https://crates.io/api/v1/crates/%1/%2/download#/%1-%2.crate
 %__cargo_crate_source_urls grep '^"checksum' | awk '{ print "Source" NR+9999 ": %%{__cargo_crate_source_url " $2 " " $3 "}" } END { print "%%global __cargo_first_crate 10000\\n%%global __cargo_last_crate " NR+9999 }'
