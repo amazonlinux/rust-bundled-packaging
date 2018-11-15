@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: MIT
+
+%__cargo %{_bindir}/cargo
+%__cargo_common_opts %{?_smp_mflags}
+%__cargo_inspector %{_bindir}/cargo-inspector
+
+%cargo_registry %{_datadir}/cargo/registry
+
+%__cargo_is_lib() %__cargo_inspector --target-kinds Cargo.toml | grep -q -F -x "$(printf 'lib\\\nrlib\\\nproc-macro')"
+%__cargo_is_bin() %__cargo_inspector --target-kinds Cargo.toml | grep -q -F -x bin
+
+%cargo_prep (\
+set -eu \
+%{__mkdir} -p .cargo \
+cat > .cargo/config << EOF \
+[build]\
+rustc = "%{__rustc}"\
+rustdoc = "%{__rustdoc}"\
+rustflags = %{__global_rustflags_toml}\
+\
+[term]\
+verbose = true\
+\
+[source]\
+\
+[source.local-registry]\
+directory = "%{cargo_registry}"\
+\
+[source.crates-io]\
+registry = "https://crates.io"\
+replace-with = "local-registry"\
+EOF\
+%{__rm} -f Cargo.lock \
+%if ! %{with check} \
+# https://github.com/rust-lang/cargo/issues/3732 \
+%{__awk} -i inplace -v INPLACE_SUFFIX=.orig '/^\\\[dev-dependencies/{f=1;next} /^\\\[/{f=0}; !f' Cargo.toml \
+%endif \
+)
+
+%__cargo_parse_opts(naf:) %{shrink:\
+%{-f:%{-a:%{error:Can't specify both -f(%{-f*}) and -a}}} \
+  %{-n:--no-default-features}                             \
+  %{-a:--all-features}                                    \
+  %{-f:--features %{-f*}}                                 \
+  %{nil}
+}
+
+%cargo_build(naf:) %{shrink:\
+%{__cargo} build                                   \
+  %{__cargo_common_opts}                           \
+  --release                                        \
+  %{__cargo_parse_opts %{-n} %{-a} %{-f:-f%{-f*}}} \
+  %*                                               \
+}
+
+%cargo_test(naf:) %{shrink:\
+%{__cargo} test                                    \
+  %{__cargo_common_opts}                           \
+  --release                                        \
+  --no-fail-fast                                   \
+  %{__cargo_parse_opts %{-n} %{-a} %{-f:-f%{-f*}}} \
+  %*                                               \
+}
+
+%cargo_install(t:naf:) (\
+set -eu                                                             \
+if %__cargo_is_lib; then                                            \
+  CRATE_NAME=$(%__cargo_inspector --name Cargo.toml)                \
+  CRATE_VERSION=$(%__cargo_inspector --version Cargo.toml)          \
+  REG_DIR=%{buildroot}%{cargo_registry}/$CRATE_NAME-$CRATE_VERSION  \
+  %{__mkdir} -p $REG_DIR                                            \
+  %{__cargo} package -l | xargs %{__cp} --parents -a -t $REG_DIR    \
+%if ! %{with check}                                                 \
+  %{__cp} -a Cargo.toml.orig $REG_DIR/Cargo.toml                    \
+%endif                                                              \
+  echo '{"files":{},"package":""}' > $REG_DIR/.cargo-checksum.json  \
+fi \
+if %__cargo_is_bin; then                                            \
+  %{shrink:%{__cargo} install                                       \
+    %{__cargo_common_opts}                                          \
+    --path .                                                        \
+    --root %{buildroot}%{_prefix}                                   \
+    %{__cargo_parse_opts %{-n} %{-a} %{-f:-f%{-f*}}}                \
+    %*                                                              \
+  }\
+  %{__rm} %{buildroot}%{_prefix}/.crates.toml                       \
+fi \
+)
