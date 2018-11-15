@@ -12,7 +12,7 @@ Ensure your main source has a Cargo.lock, or generate one by unpacking it and ru
 
 ### `%cargo_bundle_crates`
 
-Use the `%cargo_bundle_crates` macro to add source lines for crates from [crates.io][https://crates.io]. Usage:
+Use the `%cargo_bundle_crates` macro to add source lines for crates from [crates.io](https://crates.io). Usage:
 
 * `-l N`: SourceN is the Cargo.lock.
 * `-t N`: SourceN is a tarball that contains the Cargo.lock.
